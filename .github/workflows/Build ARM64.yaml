@@ -5,7 +5,7 @@ on:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
-  workflow_dispatch: # Permite disparar a compilação manualmente pela aba Actions
+  workflow_dispatch: # Permite disparar a compilação manualmente
 
 jobs:
   build-arm64:
@@ -24,7 +24,7 @@ jobs:
       - name: Configurar Go
         uses: actions/setup-go@v5
         with:
-          go-version: '>=1.23' # Versão recomendada pelo repositório do Drasl
+          go-version: '>=1.23'
           cache: true
 
       - name: Instalar compilador cruzado C/C++ para ARM64 e utilitários
@@ -35,7 +35,13 @@ jobs:
       - name: Instalar dependências do Frontend
         run: npm install
 
-      - name: Compilar Frontend e Drasl para ARM64
+      - name: 1. Gerar Assets e Swagger nativamente (AMD64)
+        run: |
+          # Executamos o target 'swag' sem variáveis GOOS/GOARCH de cross-compiling.
+          # Isso permite que o 'swag' execute normalmente no ambiente x86_64 do GitHub Actions.
+          make swag
+
+      - name: 2. Compilar o binário final do Drasl para ARM64
         env:
           GOOS: linux
           GOARCH: arm64
@@ -43,13 +49,13 @@ jobs:
           CC: aarch64-linux-gnu-gcc
           CXX: aarch64-linux-gnu-g++
         run: |
-          # O Makefile do projeto lida com o empacotamento dos assets (via esbuild) 
-          # e na sequência compila o binário em Go. 
-          # Ao exportar as variáveis de ambiente acima, o Go usará o compilador C correto para ARM64.
-          make
+          # Em vez de chamar o 'make' (que tentaria reavaliar as dependências e rodar o 'swag' novamente sob ARM64),
+          # compilamos o Drasl chamando diretamente o 'go build'.
+          # O Go irá embutir todos os arquivos gerados nativamente no executável final de ARM64.
+          go build -ldflags="-s -w" -o drasl .
 
       - name: Fazer upload do binário compilado
         uses: actions/upload-artifact@v4
         with:
           name: drasl-linux-arm64
-          path: drasl # O Makefile gera um binário chamado 'drasl' na raiz do projeto
+          path: drasl
