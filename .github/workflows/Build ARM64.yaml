@@ -1,0 +1,55 @@
+name: Build Drasl para Linux ARM64
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch: # Permite disparar a compilação manualmente pela aba Actions
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configurar Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.23' # Versão recomendada pelo repositório do Drasl
+          cache: true
+
+      - name: Instalar compilador cruzado C/C++ para ARM64 e utilitários
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu make
+
+      - name: Instalar dependências do Frontend
+        run: npm install
+
+      - name: Compilar Frontend e Drasl para ARM64
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 1
+          CC: aarch64-linux-gnu-gcc
+          CXX: aarch64-linux-gnu-g++
+        run: |
+          # O Makefile do projeto lida com o empacotamento dos assets (via esbuild) 
+          # e na sequência compila o binário em Go. 
+          # Ao exportar as variáveis de ambiente acima, o Go usará o compilador C correto para ARM64.
+          make
+
+      - name: Fazer upload do binário compilado
+        uses: actions/upload-artifact@v4
+        with:
+          name: drasl-linux-arm64
+          path: drasl # O Makefile gera um binário chamado 'drasl' na raiz do projeto
